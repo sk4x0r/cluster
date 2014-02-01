@@ -63,6 +63,7 @@ func (c *Config) getPeerInfo(myId int) map[int]Peer {
 
 type Server struct {
 	pid         int
+	//ip          int
 	peers       []int
 	outbox      chan *Envelope
 	inbox       chan *Envelope
@@ -105,7 +106,7 @@ func msgToEnvelope(msg string) Envelope {
 
 func (s *Server) handleInbox() {
 	//speak("handleInbox()")
-	responder, err := zmq.NewSocket(zmq.REP)
+	responder, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
 		fmt.Println("Error creating socket", err)
 		return
@@ -123,8 +124,6 @@ func (s *Server) handleInbox() {
 		}
 		envelope := msgToEnvelope(msg)
 		s.inbox <- &envelope
-		responder.Send("!", 0)
-		//fmt.Println("sent response")
 	}
 }
 
@@ -137,7 +136,6 @@ func envelopeToMsg(e Envelope, peerId int) string {
 	msg := e.Msg.(string)
 	message += "\"Msg\":\"" + msg
 	message += "\"}"
-	//fmt.Println("message=",message)
 	return message
 }
 
@@ -148,12 +146,12 @@ func (s *Server) handleOutbox() {
 	for i := range s.peers {
 		peerId := s.peers[i]
 
-		sock, err := zmq.NewSocket(zmq.REQ)
+		sock, err := zmq.NewSocket(zmq.PUSH)
 		if err != nil {
 			fmt.Println("Error creating socket", err)
 		}
-		st := "tcp://" + s.peerInfo[peerId].Ip + ":" + strconv.Itoa(s.peerInfo[peerId].Port)
-		sock.Connect(st)
+		sockAddr := "tcp://" + s.peerInfo[peerId].Ip + ":" + strconv.Itoa(s.peerInfo[peerId].Port)
+		sock.Connect(sockAddr)
 		s.connections[peerId] = sock
 		//s.peerInfo[peerId].soc= s.connections[peerId]
 	}
@@ -166,7 +164,6 @@ func (s *Server) handleOutbox() {
 				for peerId, conn := range s.connections {
 					msg := envelopeToMsg(envelope, peerId)
 					conn.Send(msg, 0)
-					conn.Recv(0)
 				}
 			} else {
 				peerId := envelope.Pid
@@ -174,7 +171,6 @@ func (s *Server) handleOutbox() {
 				msg := envelopeToMsg(envelope, peerId)
 				//fmt.Println(msg)
 				conn.Send(msg, 0)
-				conn.Recv(0)
 			}
 		}
 	}

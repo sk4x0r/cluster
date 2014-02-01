@@ -13,7 +13,7 @@ func TestBroadcast(t *testing.T) {
 	receiver1 := New(1001, PATH_TO_CONFIG)
 	receiver2 := New(1002, PATH_TO_CONFIG)
 	receiver3 := New(1003, PATH_TO_CONFIG)
-	receiver4 := New(1004, PATH_TO_CONFIG)
+	//receiver4 := New(1004, PATH_TO_CONFIG)
 	
 	msgCount := 100
 	
@@ -22,14 +22,14 @@ func TestBroadcast(t *testing.T) {
 	go receiveMessages(receiver1, msgCount, success)
 	go receiveMessages(receiver2, msgCount, success)
 	go receiveMessages(receiver3, msgCount, success)
-	go receiveMessages(receiver4, msgCount, success)
+	//go receiveMessages(receiver4, msgCount, success)
 	
 	successCount:=0
-	for successCount<4{
+	for successCount<3{
 		select {
 			case <-success:
 				successCount=successCount+1
-				if successCount==4{
+				if successCount==3{
 					fmt.Println("Broadcast Test passed successfully")
 				}
 				break
