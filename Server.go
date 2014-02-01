@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 	//"os"
+	"time"
 	//"io/ioutil"
 	"encoding/json"
 	zmq "github.com/pebbe/zmq4"
@@ -161,6 +162,7 @@ func (s *Server) handleOutbox() {
 		case message := <-s.outbox:
 			envelope := *message
 			if envelope.Pid == BROADCAST {
+				time.Sleep(50*time.Millisecond)
 				for peerId, conn := range s.connections {
 					msg := envelopeToMsg(envelope, peerId)
 					conn.Send(msg, 0)
