@@ -4,9 +4,9 @@ import (
 	"fmt"
 	//"os"
 	"encoding/json"
-	zmq "github.com/pebbe/zmq4"
+	//zmq "github.com/pebbe/zmq4"
 	"io/ioutil"
-	"strconv"
+	//"strconv"
 )
 
 func speak(s string) {
@@ -39,21 +39,6 @@ func loadServer(serverId int, conf Config) Server {
 	s.outbox = make(chan *Envelope, 100)
 	s.port = conf.getPort(serverId)
 	s.peerInfo = conf.getPeerInfo(serverId)
-
-	//create sockets for each peer
-	s.connections = make(map[int]*zmq.Socket)
-	for i := range s.peers {
-		peerId := s.peers[i]
-
-		sock, err := zmq.NewSocket(zmq.REQ)
-		if err != nil {
-			fmt.Println("Error creating socket", err)
-		}
-		st := "tcp://" + s.peerInfo[peerId].Ip + ":" + strconv.Itoa(s.peerInfo[peerId].Port)
-		sock.Connect(st)
-		s.connections[peerId] = sock
-		//s.peerInfo[peerId].soc= s.connections[peerId]
-	}
 	//fmt.Println(s.peerInfo)
 	//fmt.Println(s.connections)
 	go s.handleInbox()

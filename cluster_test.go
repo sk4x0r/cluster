@@ -22,26 +22,34 @@ func sendMessages(s Server, count int, pid int) {
 	for i := 0; i < count; i++ {
 		msg := createDummyMessage(i, pid)
 		outbox <- &msg
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
-	fmt.Println("Sent ", count, " messages to ", pid)
+	//fmt.Println("Sent ", count, " messages to ", pid)
 }
 
-func receiveMessages(s Server, count int) {
+func receiveMessages(s Server, count int, success chan bool) {
 	inbox := s.Inbox()
 	for i := 0; i < count; i++ {
-		//fmt.Println("Received",i)
 		<-inbox
 	}
-	fmt.Println("Received ", count, "messages")
+	//fmt.Println("Received ", count, "messages")
+	success <- true
 }
 
 func TestSendReceive(t *testing.T) {
 	sender := New(1001, PATH_TO_CONFIG)
 	receiver := New(1002, PATH_TO_CONFIG)
-
-	msgCount := 10
+	msgCount := 100
+	
+	success := make(chan bool, 1)
 	go sendMessages(sender, msgCount, receiver.Pid())
-	go receiveMessages(receiver, msgCount)
-	time.Sleep(15 * time.Second)
+	go receiveMessages(receiver, msgCount, success)
+	select {
+	case <-success:
+		fmt.Println("Send-Receive test passed successfully")
+		break
+	case <-time.After(5 * time.Minute):
+		t.Errorf("Could not send ", msgCount, " messages in 5 minute")
+		break
+	}
 }

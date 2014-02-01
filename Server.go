@@ -142,6 +142,20 @@ func envelopeToMsg(e Envelope, peerId int) string {
 
 func (s *Server) handleOutbox() {
 	//speak("handleOutbox()")
+	//create sockets for each peer
+	s.connections = make(map[int]*zmq.Socket)
+	for i := range s.peers {
+		peerId := s.peers[i]
+
+		sock, err := zmq.NewSocket(zmq.REQ)
+		if err != nil {
+			fmt.Println("Error creating socket", err)
+		}
+		st := "tcp://" + s.peerInfo[peerId].Ip + ":" + strconv.Itoa(s.peerInfo[peerId].Port)
+		sock.Connect(st)
+		s.connections[peerId] = sock
+		//s.peerInfo[peerId].soc= s.connections[peerId]
+	}
 	for {
 		select {
 		case message := <-s.outbox:
@@ -150,6 +164,7 @@ func (s *Server) handleOutbox() {
 				for peerId, conn := range s.connections {
 					msg := envelopeToMsg(envelope, peerId)
 					conn.Send(msg, 0)
+					conn.Recv(0)
 				}
 			} else {
 				peerId := envelope.Pid
@@ -157,6 +172,7 @@ func (s *Server) handleOutbox() {
 				msg := envelopeToMsg(envelope, peerId)
 				//fmt.Println(msg)
 				conn.Send(msg, 0)
+				conn.Recv(0)
 			}
 		}
 	}
