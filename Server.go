@@ -67,9 +67,17 @@ type Server struct {
 	peers       []int
 	outbox      chan *Envelope
 	inbox       chan *Envelope
+	stopInbox   chan bool
+	stopOutbox  chan bool
 	port        int
 	peerInfo    map[int]Peer
 	connections map[int]*zmq.Socket
+}
+
+func (s *Server) StopServer(){
+	s.stopInbox<-true
+	s.stopOutbox<-true
+	fmt.Println("Server stopped")
 }
 
 func (s *Server) Pid() int {
@@ -83,7 +91,6 @@ func (s *Server) Peers() []int {
 }
 
 func (s *Server) Outbox() chan *Envelope {
-	//speak("Inside Outbox()")
 	//fmt.Println("Inside Outbox()")
 	return s.outbox
 }
@@ -116,16 +123,24 @@ func (s *Server) handleInbox() {
 	responder.Bind(bindAddress)
 	//fmt.Println("socket created")
 	for {
-		//fmt.Println("waiting for response")
-		msg, err := responder.Recv(0)
-		if err != nil {
-			fmt.Println("Error receiving message", err.Error())
-			break
+		select{
+			//goroutine should return when something is received on this channel
+			case <-s.stopInbox:
+				fmt.Println("stopInbox")
+				return
+			//keep receiving and processing requests until anything is received on channel 's.stopInbox'
+			default:
+				fmt.Println("default case")
+				msg, err := responder.Recv(0)
+				if err != nil {
+					fmt.Println("Error receiving message", err.Error())
+					break
+				}
+				envelope := msgToEnvelope(msg)
+				s.inbox <- &envelope
+			}
 		}
-		envelope := msgToEnvelope(msg)
-		s.inbox <- &envelope
 	}
-}
 
 func envelopeToMsg(e Envelope, peerId int) string {
 	message := "{"
@@ -141,7 +156,6 @@ func envelopeToMsg(e Envelope, peerId int) string {
 
 func (s *Server) handleOutbox() {
 	//speak("handleOutbox()")
-	//create sockets for each peer
 	s.connections = make(map[int]*zmq.Socket)
 	for i := range s.peers {
 		peerId := s.peers[i]
@@ -172,6 +186,9 @@ func (s *Server) handleOutbox() {
 				//fmt.Println(msg)
 				conn.Send(msg, 0)
 			}
+		case <-s.stopOutbox:
+			fmt.Println("StopOutbox")
+			return
 		}
 	}
 }

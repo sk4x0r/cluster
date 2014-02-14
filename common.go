@@ -25,6 +25,7 @@ func sendMessages(s Server, count int, pid int) {
 		outbox <- &msg
 		time.Sleep(5 * time.Millisecond)
 	}
+	s.StopServer()
 	//fmt.Println("Sent ", count, " messages to ", pid)
 }
 
@@ -33,6 +34,7 @@ func receiveMessages(s Server, count int, success chan bool) {
 	for i := 0; i < count; i++ {
 		<-inbox
 	}
+	s.StopServer()
 	//fmt.Println("Received ", count, "messages")
 	success <- true
 }

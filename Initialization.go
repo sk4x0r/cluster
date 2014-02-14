@@ -41,6 +41,8 @@ func loadServer(serverId int, conf Config) Server {
 	s.peerInfo = conf.getPeerInfo(serverId)
 	//fmt.Println(s.peerInfo)
 	//fmt.Println(s.connections)
+	s.stopInbox = make(chan bool, 1)
+	s.stopOutbox = make(chan bool, 1)
 	go s.handleInbox()
 	go s.handleOutbox()
 	return s
