@@ -5,13 +5,9 @@ import (
 	//"os"
 	"time"
 	//"io/ioutil"
-	"encoding/json"
+	//"encoding/json"
 	zmq "github.com/pebbe/zmq4"
 	"strconv"
-)
-
-const (
-	BROADCAST = -1
 )
 
 type Peer struct {
@@ -26,7 +22,7 @@ type Config struct {
 }
 
 func (c *Config) getPeers(myId int) []int {
-	//speak("Inside getPeers()")
+	//fmt.Println("Inside getPeers()")
 	l := len(c.Peers)
 	pids := make([]int, l-1)
 
@@ -41,7 +37,7 @@ func (c *Config) getPeers(myId int) []int {
 }
 
 func (c *Config) getPort(myId int) int {
-	//speak("Inside getPort()")
+	//fmt.Println("Inside getPort()")
 	for _, peer := range c.Peers {
 		if peer.Pid == myId {
 			return peer.Port
@@ -51,7 +47,7 @@ func (c *Config) getPort(myId int) int {
 }
 
 func (c *Config) getPeerInfo(myId int) map[int]Peer {
-	//speak("Inside getPeerInfo()")
+	//fmt.Println("Inside getPeerInfo()")
 	peerInfo := make(map[int]Peer)
 	for _, peer := range c.Peers {
 		if peer.Pid != myId {
@@ -77,16 +73,21 @@ type Server struct {
 func (s *Server) StopServer(){
 	s.stopInbox<-true
 	s.stopOutbox<-true
-	fmt.Println("Server stopped")
+	time.Sleep(5*time.Second)
+	close(s.stopInbox)
+	close(s.stopOutbox)
+	close(s.inbox)
+	close(s.outbox)
+	//fmt.Println("Server stopped")
 }
 
 func (s *Server) Pid() int {
-	//speak("Inside Pid()")
+	//fmt.Println("Inside Pid()")
 	return s.pid
 }
 
 func (s *Server) Peers() []int {
-	//speak("Inside Peers()")
+	//fmt.Println("Inside Peers()")
 	return s.peers
 }
 
@@ -96,7 +97,7 @@ func (s *Server) Outbox() chan *Envelope {
 }
 
 func (s *Server) Inbox() chan *Envelope {
-	//speak("Inside Inbox()")
+	//fmt.Println("Inside Inbox()")
 	return s.inbox
 }
 
@@ -104,58 +105,38 @@ func (s *Server) Port() int {
 	return s.port
 }
 
-func msgToEnvelope(msg string) Envelope {
-	//speak("Inside msgToEnvelope")
-	var env Envelope
-	json.Unmarshal([]byte(msg), &env)
-	return env
-}
-
 func (s *Server) handleInbox() {
-	//speak("handleInbox()")
+	//fmt.Println("handleInbox()")
 	responder, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
-		fmt.Println("Error creating socket", err)
-		return
+		fmt.Println("Error creating socket")
+		panic(err)
 	}
 	defer responder.Close()
 	bindAddress := "tcp://*:" + strconv.Itoa(s.port)
 	responder.Bind(bindAddress)
+	responder.SetRcvtimeo(1000*time.Millisecond)
 	//fmt.Println("socket created")
 	for {
 		select{
 			//goroutine should return when something is received on this channel
 			case <-s.stopInbox:
-				fmt.Println("stopInbox")
 				return
-			//keep receiving and processing requests until anything is received on channel 's.stopInbox'
+			//otherwise.. keep receiving and processing requests
 			default:
-				fmt.Println("default case")
-				msg, err := responder.Recv(0)
+				msg, err := responder.RecvBytes(0)
+				//fmt.Println("Received")
 				if err != nil {
-					fmt.Println("Error receiving message", err.Error())
+					//fmt.Println("Error receiving message", err.Error())
 					break
 				}
-				envelope := msgToEnvelope(msg)
+				envelope := gobToEnvelope(msg)
 				s.inbox <- &envelope
 			}
 		}
 	}
 
-func envelopeToMsg(e Envelope, peerId int) string {
-	message := "{"
-	pid := strconv.Itoa(peerId)
-	message += "\"Pid\":" + pid + ","
-	msgId := strconv.FormatInt(e.MsgId, 10)
-	message += "\"MsgId\":" + msgId + ","
-	msg := e.Msg.(string)
-	message += "\"Msg\":\"" + msg
-	message += "\"}"
-	return message
-}
-
-func (s *Server) handleOutbox() {
-	//speak("handleOutbox()")
+func (s *Server) initializeSockets(){
 	s.connections = make(map[int]*zmq.Socket)
 	for i := range s.peers {
 		peerId := s.peers[i]
@@ -169,25 +150,30 @@ func (s *Server) handleOutbox() {
 		s.connections[peerId] = sock
 		//s.peerInfo[peerId].soc= s.connections[peerId]
 	}
+}
+
+func (s *Server) handleOutbox() {
+	//fmt.Println("handleOutbox()")
 	for {
 		select {
 		case message := <-s.outbox:
 			envelope := *message
 			if envelope.Pid == BROADCAST {
+				//fmt.Println("Broadcasting")
 				time.Sleep(50*time.Millisecond)
-				for peerId, conn := range s.connections {
-					msg := envelopeToMsg(envelope, peerId)
-					conn.Send(msg, 0)
+				for _, conn := range s.connections {
+					//TODO: insert individual pids in each envelope
+					msg := envelopeToGob(envelope)
+					conn.SendBytes(msg, 0)
 				}
 			} else {
 				peerId := envelope.Pid
 				conn := s.connections[peerId]
-				msg := envelopeToMsg(envelope, peerId)
+				msg := envelopeToGob(envelope)
 				//fmt.Println(msg)
-				conn.Send(msg, 0)
+				conn.SendBytes(msg, 0)
 			}
 		case <-s.stopOutbox:
-			fmt.Println("StopOutbox")
 			return
 		}
 	}
